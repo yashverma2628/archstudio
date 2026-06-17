@@ -12,3 +12,7 @@ Optimised mobile view, for proper functioning and minimalist look overall.
 Rewrite the content of the web. The website is for certificate distribution after an offline completion of course. NOTE: The website is not for selling course online, rather just a certificate distribution website. Leave the logins as it is necessary to obtain the certficate on that registered login detials.
 Create a system for generating user id and password for the registered users approved by the admin. Where the admin can also assign the user id and password, by which the users can login into their account
 And let create an account on firebase for the students approved by the admin.
+<<<<<<< HEAD
+Create a credit line at the footer - "In Action by "logo - [\public\Logo.png]" [https://yashverma2628.github.io/yashkecode/] in collaboration with "logo - [\public\logolight.png]" [https://lightzia.netlify.app/] 
+=======
+>>>>>>> 60716d0239c3fcc2543cb5900d357fc6f87c28be

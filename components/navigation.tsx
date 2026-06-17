@@ -14,11 +14,11 @@ interface NavigationProps {
   onAdminLogout?: () => void
 }
 
-export function Navigation({ 
-  currentView, 
-  onViewChange, 
+export function Navigation({
+  currentView,
+  onViewChange,
   isAdminAuthenticated,
-  onAdminLogout 
+  onAdminLogout
 }: NavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
@@ -36,10 +36,14 @@ export function Navigation({
   return (
     <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded bg-primary" />
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            ArchStudio
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/logo2.png"
+            alt="Arch Studio Logo"
+            className="h-12 w-16 object-contain transition-transform hover:scale-110 duration-200 drop-shadow-[0_0_2px_rgba(255,255,255,0.25)]"
+          />
+          <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
+            ARCH STUDIO
           </span>
         </div>
 

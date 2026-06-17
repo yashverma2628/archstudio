@@ -179,8 +179,12 @@ export function StudentPortal() {
             <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-primary rounded-br-lg" />
 
             <div className="text-center space-y-6">
-              <div className="mx-auto h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <Phone className="h-7 w-7 text-primary" />
+              <div className="mx-auto h-16 w-16 flex items-center justify-center transition-transform hover:scale-105 duration-300">
+                <img
+                  src="/logo2.png"
+                  alt="ArchStudio Logo"
+                  className="h-16 w-16 object-contain drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]"
+                />
               </div>
 
               <div className="space-y-2">
