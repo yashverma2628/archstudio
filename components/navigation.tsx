@@ -39,11 +39,11 @@ export function Navigation({
         <div className="flex items-center gap-2.5">
           <img
             src="/logo2.png"
-            alt="Arch Studio Logo"
-            className="h-12 w-16 object-contain transition-transform hover:scale-110 duration-200 drop-shadow-[0_0_2px_rgba(255,255,255,0.25)]"
+            alt="Baderia Global Logo"
+            className="h-12 w-16 object-contain transition-transform hover:scale-110 duration-200"
           />
-          <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
-            ARCH STUDIO
+          <span className="text-lg font-bold tracking-tight text-foreground">
+            Baderia Global
           </span>
         </div>
 

@@ -15,6 +15,7 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore"
+import QRCode from "qrcode"
 
 interface StudentCourse {
   id: string
@@ -25,6 +26,11 @@ interface StudentCourse {
   completed: boolean
   completedAt?: string
   certificateUrl?: string
+  certificateId?: string
+  registrationNo?: string
+  certificateTemplate?: string
+  courseStartDate?: string
+  courseEndDate?: string
 }
 
 export function StudentPortal() {
@@ -37,45 +43,176 @@ export function StudentPortal() {
   const [isLoading, setIsLoading] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
-  // Force-download a certificate via the Cloudinary fl_attachment transformation
-  const handleDownload = async (url: string, courseTitle: string, enrollmentId: string) => {
-    setDownloadingId(enrollmentId)
+  // Client-side dynamic PDF generator overlaying template with local QR code
+  const handleDownload = async (course: StudentCourse, studentName: string) => {
+    setDownloadingId(course.id)
     try {
-      // Fix legacy Cloudinary certificates that don't have the .pdf extension
-      let finalUrl = url;
-      if (url.includes("cloudinary.com") && !url.endsWith(".pdf")) {
-        finalUrl = `${url}.pdf`;
+      const canvas = document.createElement("canvas")
+      canvas.width = 2000
+      canvas.height = 1414
+      const ctx = canvas.getContext("2d")
+      if (!ctx) throw new Error("Could not get canvas context")
+
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      
+      let templateSrc = course.certificateTemplate
+
+      if (!templateSrc && db) {
+        try {
+          const globalSnap = await getDoc(doc(db, "settings", "global"))
+          if (globalSnap.exists()) {
+            templateSrc = globalSnap.data().certificateTemplate || null
+          }
+        } catch (e) {
+          console.error("Error fetching global template:", e)
+        }
       }
 
-      // Use Cloudinary fl_attachment flag to force download (works cross-origin)
-      const downloadUrl = finalUrl.includes("cloudinary.com")
-        ? finalUrl.replace("/upload/", "/upload/fl_attachment/")
-        : finalUrl
-
-      // Try fetch + blob first (cleanest approach)
-      const response = await fetch(downloadUrl)
-      if (response.ok) {
-        const blob = await response.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = blobUrl
-        a.download = `${courseTitle.replace(/\s+/g, "_")}_Certificate.pdf`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(blobUrl)
-      } else {
-        // Fallback: open the fl_attachment URL in same tab (forces browser download)
-        window.location.href = downloadUrl
+      if (!templateSrc) {
+        templateSrc = "https://example.com/invalid-placeholder.jpg"
       }
-    } catch {
-      // CORS blocked — open directly, browser will download because of fl_attachment
-      const downloadUrl = url.includes("cloudinary.com")
-        ? url.replace("/upload/", "/upload/fl_attachment/")
-        : url
-      window.location.href = downloadUrl
+
+      await new Promise<void>((resolve) => {
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          resolve()
+        }
+        img.onerror = () => {
+          console.warn("Failed to load certificate template, drawing procedural template fallback.")
+          ctx.fillStyle = "#FDFBF7"
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+          ctx.strokeStyle = "#800020"
+          ctx.lineWidth = 20
+          ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80)
+          
+          ctx.strokeStyle = "#D4AF37"
+          ctx.lineWidth = 4
+          ctx.strokeRect(60, 60, canvas.width - 120, canvas.height - 120)
+
+          ctx.textAlign = "center"
+          ctx.fillStyle = "#800020"
+          ctx.font = "bold 90px 'Georgia', serif"
+          ctx.fillText("Baderia Global", canvas.width / 2, 220)
+
+          ctx.fillStyle = "#D4AF37"
+          ctx.font = "bold tracking-widest 28px 'Inter', sans-serif"
+          ctx.fillText("THE BEST INSTITUTE OF ENGINEERING & MANAGEMENT", canvas.width / 2, 290)
+
+          ctx.fillStyle = "#111827"
+          ctx.font = "bold 64px 'Georgia', serif"
+          ctx.fillText("CERTIFICATE OF COMPLETION", canvas.width / 2, 450)
+
+          resolve()
+        }
+        img.src = templateSrc
+      })
+
+      ctx.textBaseline = "middle"
+
+      const textCenterX = 1280
+
+      // Line 1: This is to Certify that
+      ctx.textAlign = "center"
+      ctx.font = "italic 36px 'Georgia', serif"
+      ctx.fillStyle = "#374151"
+      ctx.fillText("This is to Certify that", textCenterX, 570)
+
+      // Line 2: Mr./Ms. (small black) and Participant Name (red) on same line
+      ctx.font = "italic 36px 'Georgia', serif"
+      const prefixWidth = ctx.measureText("Mr./Ms. ").width
+      ctx.font = "bold italic 56px 'Georgia', serif"
+      const nameWidth = ctx.measureText(studentName).width
+
+      const totalWidth = prefixWidth + nameWidth
+      const startX = textCenterX - totalWidth / 2
+
+      ctx.textAlign = "left"
+      ctx.font = "italic 36px 'Georgia', serif"
+      ctx.fillStyle = "#374151"
+      ctx.fillText("Mr./Ms. ", startX, 640)
+
+      ctx.font = "bold italic 56px 'Georgia', serif"
+      ctx.fillStyle = "#800020"
+      ctx.fillText(studentName, startX + prefixWidth, 640)
+
+      // Reset back to center alignment for other lines
+      ctx.textAlign = "center"
+
+      // Line 3: has Successfully
+      ctx.font = "italic 36px 'Georgia', serif"
+      ctx.fillStyle = "#374151"
+      ctx.fillText("has Successfully", textCenterX, 705)
+
+      // Line 4: Participated in [Duration] training on
+      ctx.font = "italic 36px 'Georgia', serif"
+      ctx.fillStyle = "#374151"
+      const durLabel = course.duration ? `${course.duration} ` : ""
+      ctx.fillText(`Participated in ${durLabel}training on`, textCenterX, 770)
+
+      // Line 5: "[Course Title]"
+      ctx.font = "bold 46px 'Georgia', serif"
+      ctx.fillStyle = "#111827"
+      ctx.fillText(`"${course.title}"`, textCenterX, 845)
+
+      // Line 6: from [startDate] to [endDate] organised by
+      ctx.font = "italic 36px 'Georgia', serif"
+      ctx.fillStyle = "#374151"
+      const start = course.courseStartDate || "05/02/2024"
+      const end = course.courseEndDate || course.completedAt || "17/02/2024"
+      ctx.fillText(`from ${start} to ${end} organised by`, textCenterX, 910)
+
+      // Line 7: Department (shifted upward to prevent trainers signature overlap)
+      ctx.font = "italic 36px 'Georgia', serif"
+      ctx.fillStyle = "#374151"
+      ctx.fillText("Mechanical Engineering Department.", textCenterX, 970)
+
+      // Metadata (Bottom Left)
+      ctx.textAlign = "left"
+      ctx.font = "bold 22px 'Courier New', monospace"
+      ctx.fillStyle = "#374151"
+      const certId = course.certificateId || "BGEIM-GEN-PENDING"
+      const regNo = course.registrationNo || "BGEIM-REG-PENDING"
+      const dateOfIssue = course.completedAt || new Date().toLocaleDateString("en-GB")
+
+      ctx.fillText(`Certificate No : ${certId}`, 240, 1150)
+      ctx.fillText(`Registration No: ${regNo}`, 240, 1190)
+      ctx.fillText(`Date of Issue  : ${dateOfIssue}`, 240, 1230)
+
+      // Draw QR Code centered inside the white outlined box on the left banner
+      const verificationUrl = `${window.location.origin}?verify=${encodeURIComponent(certId)}`
+      try {
+        const qrDataUrl = await QRCode.toDataURL(verificationUrl, { margin: 1, width: 220 })
+        const qrImg = new Image()
+        await new Promise<void>((resolve) => {
+          qrImg.onload = () => {
+            ctx.drawImage(qrImg, 370, 440, 190, 190)
+            resolve()
+          }
+          qrImg.onerror = () => resolve()
+          qrImg.src = qrDataUrl
+        })
+      } catch (e) {
+        console.error("QR Code generator failed:", e)
+      }
+
+      // Generate and save PDF using jsPDF
+      const { jsPDF } = await import("jspdf")
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "px",
+        format: [canvas.width, canvas.height]
+      })
+
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, canvas.width, canvas.height)
+      pdf.save(`${course.title.replace(/\s+/g, "_")}_Certificate.pdf`)
+    } catch (err) {
+      console.error("Certificate generation error:", err)
+      alert("Failed to generate and download certificate. Please try again.")
+    } finally {
+      setDownloadingId(null)
     }
-    setDownloadingId(null)
   }
 
   const handleVerify = async () => {
@@ -89,44 +226,54 @@ export function StudentPortal() {
         return
       }
 
-      // 1. Authenticate with Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password)
+      let loginEmail = email.trim()
+      
+      if (!loginEmail.includes("@")) {
+        const phoneQ = query(collection(db, "students"), where("phone", "==", loginEmail))
+        const phoneSnap = await getDocs(phoneQ)
+        if (!phoneSnap.empty) {
+          const studentDoc = phoneSnap.docs[0]
+          const studentData = studentDoc.data()
+          if (studentData.email) {
+            loginEmail = studentData.email
+          }
+        } else {
+          setError("No student record found with this phone number.")
+          setIsLoading(false)
+          return
+        }
+      }
+
+      const userCredential = await signInWithEmailAndPassword(auth, loginEmail, password)
       const user = userCredential.user
 
-      // 2. Query students by email or uid
       let studentsQ = query(collection(db, "students"), where("uid", "==", user.uid))
       let studentsSnap = await getDocs(studentsQ)
 
-      // Fallback to email if uid isn't set (for some reason)
       if (studentsSnap.empty) {
-        studentsQ = query(collection(db, "students"), where("email", "==", email.trim()))
+        studentsQ = query(collection(db, "students"), where("email", "==", loginEmail))
         studentsSnap = await getDocs(studentsQ)
       }
 
       if (studentsSnap.empty) {
         setError("No student record found for this account. Please contact support.")
-        // Optionally sign out the user if no record is found
         await signOut(auth)
         setIsLoading(false)
         return
       }
 
-      // Use the first matching student (phone should be unique)
       const studentDoc = studentsSnap.docs[0]
       const studentData = studentDoc.data()
       const foundName = studentData.name as string
 
-      // Gather all enrollments for this student (could be multiple docs if enrolled in many courses)
       const allStudentDocs = studentsSnap.docs
-
-      // Fetch course details for each enrollment
       const courseEntries: StudentCourse[] = []
+
       for (const sDoc of allStudentDocs) {
         const sData = sDoc.data()
         const courseId = sData.courseId as string
         if (!courseId) continue
 
-        // Fetch course details
         const courseRef = doc(db, "courses", courseId)
         const courseSnap = await getDoc(courseRef)
         const courseData = courseSnap.exists() ? courseSnap.data() : null
@@ -140,6 +287,11 @@ export function StudentPortal() {
           completed: Boolean(sData.completed),
           completedAt: sData.completedAt || undefined,
           certificateUrl: sData.certificateUrl || undefined,
+          certificateId: sData.certificateId || undefined,
+          registrationNo: sData.registrationNo || undefined,
+          certificateTemplate: courseData?.certificateTemplate || undefined,
+          courseStartDate: sData.courseStartDate || undefined,
+          courseEndDate: sData.courseEndDate || undefined,
         })
       }
 
@@ -168,13 +320,11 @@ export function StudentPortal() {
     setError("")
   }
 
-  // ─── Verification Screen ────────────────────────────────────────────────────
   if (!isVerified) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="relative rounded-lg border border-border bg-card p-8 shadow-2xl">
-            {/* Decorative corner accents */}
             <div className="absolute top-0 left-0 h-8 w-8 border-t-2 border-l-2 border-primary rounded-tl-lg" />
             <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-primary rounded-br-lg" />
 
@@ -190,15 +340,15 @@ export function StudentPortal() {
               <div className="space-y-2">
                 <h1 className="text-2xl font-bold text-foreground">Student Portal</h1>
                 <p className="text-muted-foreground">
-                  Enter your registered phone number to access your courses and certificates
+                  Enter your registered phone number or email to access your courses and certificates
                 </p>
               </div>
 
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Input
-                    type="email"
-                    placeholder="Email Address"
+                    type="text"
+                    placeholder="Email or Phone Number"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-12 text-center text-lg bg-input border-border"
@@ -240,7 +390,6 @@ export function StudentPortal() {
     )
   }
 
-  // ─── Dashboard Screen ───────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-6 py-12">
@@ -279,7 +428,7 @@ export function StudentPortal() {
           </div>
           <div className="p-4 rounded-lg border border-border bg-card">
             <p className="text-2xl font-bold text-foreground">
-              {courses.filter((c) => c.completed && c.certificateUrl).length}
+              {courses.filter((c) => c.completed && c.certificateId).length}
             </p>
             <p className="text-sm text-muted-foreground">Certificates</p>
           </div>
@@ -311,12 +460,12 @@ export function StudentPortal() {
                 {/* Status Badge */}
                 <div className="flex items-center justify-between">
                   {course.completed ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#10b981]/15 text-[#10b981] text-xs font-semibold border border-[#10b981]/30">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Completed
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-muted-foreground text-xs font-medium">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary text-muted-foreground text-xs font-semibold">
                       <Clock className="h-3.5 w-3.5" />
                       In Progress
                     </span>
@@ -349,30 +498,19 @@ export function StudentPortal() {
 
                 {/* Action Button */}
                 {course.completed ? (
-                  course.certificateUrl ? (
-                    <Button
-                      onClick={() => handleDownload(course.certificateUrl!, course.title, course.id)}
-                      disabled={downloadingId === course.id}
-                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90 group"
-                    >
-                      {downloadingId === course.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 mr-2 group-hover:animate-pulse" />
-                      )}
-                      Download Certificate
-                      <Download className="h-4 w-4 ml-2" />
-                    </Button>
-                  ) : (
-                    <div className="py-3 text-center rounded-md bg-primary/5 border border-primary/20">
-                      <p className="text-sm text-primary font-medium">
-                        Certificate being prepared…
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Your instructor will upload it soon
-                      </p>
-                    </div>
-                  )
+                  <Button
+                    onClick={() => handleDownload(course, studentName)}
+                    disabled={downloadingId === course.id}
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90 group"
+                  >
+                    {downloadingId === course.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2 group-hover:animate-pulse" />
+                    )}
+                    Download Certificate
+                    <Download className="h-4 w-4 ml-2" />
+                  </Button>
                 ) : (
                   <div className="py-3 text-center rounded-md bg-secondary/50">
                     <p className="text-sm text-muted-foreground">

@@ -12,7 +12,8 @@ Optimised mobile view, for proper functioning and minimalist look overall.
 Rewrite the content of the web. The website is for certificate distribution after an offline completion of course. NOTE: The website is not for selling course online, rather just a certificate distribution website. Leave the logins as it is necessary to obtain the certficate on that registered login detials.
 Create a system for generating user id and password for the registered users approved by the admin. Where the admin can also assign the user id and password, by which the users can login into their account
 And let create an account on firebase for the students approved by the admin.
-<<<<<<< HEAD
 Create a credit line at the footer - "In Action by "logo - [\public\Logo.png]" [https://yashverma2628.github.io/yashkecode/] in collaboration with "logo - [\public\logolight.png]" [https://lightzia.netlify.app/] 
-=======
->>>>>>> 60716d0239c3fcc2543cb5900d357fc6f87c28be
+
+
+my professor  wants that in the website , the certificate should be automatically generated , not uploaded  by the admin, we will only give the template , and the name , course , duration of the user should automatically filled for the respective user and the user can download the certificate , and the certificate should also have a small QR code of the website which will redirect people in the website , and the certificate also have a unique id for each certificate which should be stored in the firebase database and the certificate, 
+ and also change the ui ux to the red theme that i am providing to the agent and the template also , this should be the basic structure,   we will keep the template in the cloudinary only and not supabase , and we will keep the user data in the firerbase , each time the user try to download the certificate the template will be fetched from cloudinary and filled with users information and then the user can download it , remove the feature of uploading and downloading the certificate

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'ArchStudio | Certificate Management',
-  description: 'Premium course certificate management for architectural design mastery',
+  title: 'Baderia Global | Certificate Management',
+  description: 'Premium course certificate verification and management',
   generator: 'v0.app',
   icons: {
     icon: '/logo2.png',

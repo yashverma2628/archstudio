@@ -3,9 +3,19 @@
 import { useState } from "react"
 import { Navigation } from "@/components/navigation"
 import { LandingPage } from "@/components/landing-page"
-import { AdminDashboard } from "@/components/admin-dashboard"
-import { StudentPortal } from "@/components/student-portal"
 import { AdminLogin } from "@/components/admin-login"
+import dynamic from "next/dynamic"
+import { cn } from "@/lib/utils"
+
+const AdminDashboard = dynamic(
+  () => import("@/components/admin-dashboard").then((mod) => mod.AdminDashboard),
+  { ssr: false }
+)
+
+const StudentPortal = dynamic(
+  () => import("@/components/student-portal").then((mod) => mod.StudentPortal),
+  { ssr: false }
+)
 
 type View = "home" | "admin" | "admin-login" | "student"
 
@@ -18,8 +28,11 @@ export default function Home() {
   }
 
   const handleAdminLogin = () => {
-    // Show login form instead of directly going to admin
-    setCurrentView("admin-login")
+    if (isAdminAuthenticated) {
+      setCurrentView("admin")
+    } else {
+      setCurrentView("admin-login")
+    }
   }
 
   const handleAdminAuthenticated = () => {
@@ -41,16 +54,20 @@ export default function Home() {
     setCurrentView("home")
   }
 
+  const isDashboardView = currentView === "admin" || currentView === "student"
+
   return (
     <div className="min-h-screen bg-background">
-      <Navigation 
-        currentView={currentView === "admin-login" ? "admin" : currentView} 
-        onViewChange={handleViewChange}
-        isAdminAuthenticated={isAdminAuthenticated}
-        onAdminLogout={handleAdminLogout}
-      />
+      {!isDashboardView && (
+        <Navigation 
+          currentView={currentView === "admin-login" ? "admin" : currentView} 
+          onViewChange={handleViewChange}
+          isAdminAuthenticated={isAdminAuthenticated}
+          onAdminLogout={handleAdminLogout}
+        />
+      )}
 
-      <main className="pt-16">
+      <main className={cn(!isDashboardView && "pt-16")}>
         {currentView === "home" && (
           <LandingPage
             onStudentLogin={handleStudentLogin}
@@ -65,9 +82,11 @@ export default function Home() {
           />
         )}
 
-        {currentView === "admin" && isAdminAuthenticated && <AdminDashboard />}
+        {currentView === "admin" && isAdminAuthenticated && (
+          <AdminDashboard onLogout={handleAdminLogout} />
+        )}
 
-        {currentView === "student" && <StudentPortal />}
+        {currentView === "student" && <StudentPortal onLogout={() => setCurrentView("home")} />}
       </main>
     </div>
   )
