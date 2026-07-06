@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Phone, Award, Clock, Download, Sparkles, CheckCircle2, Loader2 } from "lucide-react"
+import { Phone, Award, Clock, Download, Sparkles, CheckCircle2, Loader2, ArrowLeft, Mail, Key } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,11 @@ import {
   getDoc,
 } from "firebase/firestore"
 import QRCode from "qrcode"
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp"
 
 interface StudentCourse {
   id: string
@@ -42,6 +47,101 @@ export function StudentPortal() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  // Forgot Password flow states
+  const [viewMode, setViewMode] = useState<"login" | "forgot-password-request" | "forgot-password-verify">("login")
+  const [forgotEmailOrPhone, setForgotEmailOrPhone] = useState("")
+  const [resetOtp, setResetOtp] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmNewPassword, setConfirmNewPassword] = useState("")
+  const [successMessage, setSuccessMessage] = useState("")
+
+  const handleSendOtp = async () => {
+    setError("")
+    setSuccessMessage("")
+
+    if (!forgotEmailOrPhone.trim()) {
+      setError("Please enter your email or phone number.")
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/auth/forgot-password/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailOrPhone: forgotEmailOrPhone.trim() })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || "Failed to send reset code.")
+      }
+
+      setSuccessMessage("If your account is registered, a 6-digit verification code has been sent.")
+      setViewMode("forgot-password-verify")
+      setResetOtp("")
+      setNewPassword("")
+      setConfirmNewPassword("")
+    } catch (err: any) {
+      setError(err.message || "An error occurred. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyAndReset = async () => {
+    setError("")
+    setSuccessMessage("")
+
+    if (resetOtp.length !== 6) {
+      setError("Please enter a valid 6-digit verification code.")
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setError("Password must be at least 6 characters long.")
+      return
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setError("Passwords do not match.")
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/auth/forgot-password/verify-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emailOrPhone: forgotEmailOrPhone.trim(),
+          otp: resetOtp,
+          newPassword
+        })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || "Failed to verify code and reset password.")
+      }
+
+      setSuccessMessage("Password reset successfully! You can now log in.")
+      setViewMode("login")
+      
+      // Auto pre-fill username and clear password
+      setEmail(forgotEmailOrPhone)
+      setPassword("")
+    } catch (err: any) {
+      setError(err.message || "An error occurred. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Client-side dynamic PDF generator overlaying template with local QR code
   const handleDownload = async (course: StudentCourse, studentName: string) => {
@@ -318,6 +418,8 @@ export function StudentPortal() {
     setStudentName("")
     setCourses([])
     setError("")
+    setSuccessMessage("")
+    setViewMode("login")
   }
 
   if (!isVerified) {
@@ -328,62 +430,248 @@ export function StudentPortal() {
             <div className="absolute top-0 left-0 h-8 w-8 border-t-2 border-l-2 border-primary rounded-tl-lg" />
             <div className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-primary rounded-br-lg" />
 
-            <div className="text-center space-y-6">
-              <div className="mx-auto h-16 w-16 flex items-center justify-center transition-transform hover:scale-105 duration-300">
-                <img
-                  src="/logo2.png"
-                  alt="ArchStudio Logo"
-                  className="h-16 w-16 object-contain drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <h1 className="text-2xl font-bold text-foreground">Student Portal</h1>
-                <p className="text-muted-foreground">
-                  Enter your registered phone number or email to access your courses and certificates
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Input
-                    type="text"
-                    placeholder="Email or Phone Number"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 text-center text-lg bg-input border-border"
+            {viewMode === "login" && (
+              <div className="text-center space-y-6">
+                <div className="mx-auto h-16 w-16 flex items-center justify-center transition-transform hover:scale-105 duration-300">
+                  <img
+                    src="/logo2.png"
+                    alt="ArchStudio Logo"
+                    className="h-16 w-16 object-contain drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]"
                   />
-                  <Input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && email && password && handleVerify()}
-                    className="h-12 text-center text-lg bg-input border-border"
-                  />
-                  {error && <p className="text-sm text-destructive">{error}</p>}
                 </div>
 
-                <Button
-                  onClick={handleVerify}
-                  disabled={!email || !password || isLoading}
-                  className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Authenticating…
-                    </>
-                  ) : (
-                    "Login & Access"
-                  )}
-                </Button>
-              </div>
+                <div className="space-y-2">
+                  <h1 className="text-2xl font-bold text-foreground">Student Portal</h1>
+                  <p className="text-muted-foreground">
+                    Enter your registered phone number or email to access your courses and certificates
+                  </p>
+                </div>
 
-              <p className="text-xs text-muted-foreground">
-                Use the credentials provided by your instructor
-              </p>
-            </div>
+                <div className="space-y-4">
+                  {successMessage && (
+                    <div className="p-3 text-sm text-green-500 bg-green-500/10 border border-green-500/20 rounded-md">
+                      {successMessage}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Input
+                      type="text"
+                      placeholder="Email or Phone Number"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="h-12 text-center text-lg bg-input border-border"
+                    />
+                    <Input
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && email && password && handleVerify()}
+                      className="h-12 text-center text-lg bg-input border-border"
+                    />
+                    {error && <p className="text-sm text-destructive">{error}</p>}
+                  </div>
+
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewMode("forgot-password-request")
+                        setForgotEmailOrPhone(email)
+                        setError("")
+                        setSuccessMessage("")
+                      }}
+                      className="text-xs font-medium text-primary hover:underline transition-colors"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+
+                  <Button
+                    onClick={handleVerify}
+                    disabled={!email || !password || isLoading}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Authenticating…
+                      </>
+                    ) : (
+                      "Login & Access"
+                    )}
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Use the credentials provided by your instructor
+                </p>
+              </div>
+            )}
+
+            {viewMode === "forgot-password-request" && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setViewMode("login")
+                      setError("")
+                      setSuccessMessage("")
+                    }}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <h1 className="text-xl font-bold text-foreground">Forgot Password</h1>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Enter your registered email or phone number. We will send a 6-digit OTP code to your registered email address.
+                  </p>
+
+                  <div className="space-y-2">
+                    <Input
+                      type="text"
+                      placeholder="Registered Email or Phone"
+                      value={forgotEmailOrPhone}
+                      onChange={(e) => setForgotEmailOrPhone(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                      className="h-12 text-center text-lg bg-input border-border"
+                    />
+                    {error && <p className="text-sm text-destructive">{error}</p>}
+                  </div>
+
+                  <Button
+                    onClick={handleSendOtp}
+                    disabled={!forgotEmailOrPhone || isLoading}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Sending Code…
+                      </>
+                    ) : (
+                      "Send Verification Code"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {viewMode === "forgot-password-verify" && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setViewMode("forgot-password-request")
+                      setError("")
+                      setSuccessMessage("")
+                    }}
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <h1 className="text-xl font-bold text-foreground">Verify OTP</h1>
+                </div>
+
+                <div className="space-y-4">
+                  {successMessage && (
+                    <div className="p-3 text-xs text-green-500 bg-green-500/10 border border-green-500/20 rounded-md">
+                      {successMessage}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="space-y-2 text-center">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Enter 6-digit Code
+                      </label>
+                      <div className="flex justify-center">
+                        <InputOTP
+                          maxLength={6}
+                          value={resetOtp}
+                          onChange={setResetOtp}
+                          disabled={isLoading}
+                        >
+                          <InputOTPGroup className="gap-2">
+                            <InputOTPSlot index={0} className="h-10 w-9 text-center text-lg bg-input border-border" />
+                            <InputOTPSlot index={1} className="h-10 w-9 text-center text-lg bg-input border-border" />
+                            <InputOTPSlot index={2} className="h-10 w-9 text-center text-lg bg-input border-border" />
+                            <InputOTPSlot index={3} className="h-10 w-9 text-center text-lg bg-input border-border" />
+                            <InputOTPSlot index={4} className="h-10 w-9 text-center text-lg bg-input border-border" />
+                            <InputOTPSlot index={5} className="h-10 w-9 text-center text-lg bg-input border-border" />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        New Password
+                      </label>
+                      <Input
+                        type="password"
+                        placeholder="Min 6 characters"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="h-12 text-center text-lg bg-input border-border"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-muted-foreground">
+                        Confirm New Password
+                      </label>
+                      <Input
+                        type="password"
+                        placeholder="Re-enter password"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleVerifyAndReset()}
+                        className="h-12 text-center text-lg bg-input border-border"
+                      />
+                    </div>
+
+                    {error && <p className="text-sm text-destructive text-center">{error}</p>}
+                  </div>
+
+                  <Button
+                    onClick={handleVerifyAndReset}
+                    disabled={!resetOtp || resetOtp.length !== 6 || !newPassword || !confirmNewPassword || isLoading}
+                    className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Resetting Password…
+                      </>
+                    ) : (
+                      "Reset Password & Go to Login"
+                    )}
+                  </Button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={isLoading}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Didn't get the code? Resend
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
