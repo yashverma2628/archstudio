@@ -53,15 +53,32 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Rate limiting check: Limit requests to once every 60 seconds
+    const studentData = studentDoc.data()
+    if (studentData.passwordReset && studentData.passwordReset.requestedAt) {
+      const lastRequested = studentData.passwordReset.requestedAt.toDate 
+        ? studentData.passwordReset.requestedAt.toDate() 
+        : new Date(studentData.passwordReset.requestedAt)
+      
+      const secondsPassed = Math.floor((Date.now() - lastRequested.getTime()) / 1000)
+      if (secondsPassed < 60) {
+        return NextResponse.json(
+          { success: false, error: `Please wait ${60 - secondsPassed} seconds before requesting a new code.` },
+          { status: 429 }
+        )
+      }
+    }
+
     // Generate a secure 6-digit OTP code
     const otp = Math.floor(100000 + Math.random() * 900000).toString()
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes from now
 
-    // Save the OTP, expiry time, and reset failed attempts to Firestore
+    // Save the OTP, expiry time, request timestamp, and reset failed attempts to Firestore
     await studentDoc.ref.update({
       passwordReset: {
         otp: otp,
         expiresAt: expiresAt,
+        requestedAt: new Date(),
         failedAttempts: 0
       }
     })
